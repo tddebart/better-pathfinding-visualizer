@@ -4,20 +4,22 @@ import {dijkstra, getNodesInShortestPathOrder} from '../algorithms/dijkstra'
 import 'rc-slider/assets/index.css';
 import Rainbow from 'rainbowvis.js'
 
-const resolution = 65
-const width = 1470;
-const height = 700;
+const resolution = 29
+const width = Math.floor(window.innerWidth*0.98);
+const height =  Math.floor(window.innerHeight*0.9);
 
-const START_NODE_COL = 5;
-const START_NODE_ROW = 5;
+let START_NODE_COL = 5;
+let START_NODE_ROW = 5;
 
-const FINISH_NODE_COL = 20
-const FINISH_NODE_ROW = 5;
+let FINISH_NODE_COL = 20
+let FINISH_NODE_ROW = 5;
 
 let timeouts = [];
 
 let canvas;
 let ctx;
+
+let speed = 30;
 
 const FRAMES_PER_SECOND = 60;  // Valid values are 60,30,20,15,10...
 // set the mim time to render the next frame
@@ -85,8 +87,8 @@ export default class Visualizer extends Component {
         this.state = {
             grid: [],
             mouseIsPressed: false,
-            width: 22,
-            height: 10,
+            isDraggingStart: false,
+            isDraggingFinish: false,
         };
     }
 
@@ -108,10 +110,8 @@ export default class Visualizer extends Component {
         canvas = document.getElementById('canvas');
         ctx = canvas.getContext('2d')
 
-        const {width,height} = this.state
-
-        canvas.width = width*resolution;
-        canvas.height = height*resolution;
+        canvas.width = width
+        canvas.height = height
 
         for (let y = 0; y < canvas.height; y+= resolution) {
             for (let x = 0; x < canvas.width; x+= resolution) {
@@ -129,19 +129,7 @@ export default class Visualizer extends Component {
         this.drawLine(0,canvas.height,canvas.width,canvas.height)
         this.drawLine(canvas.width,0,canvas.width,canvas.height)
 
-        const {grid} = this.state
-        for (let y = 0; y < grid.length; y++) {
-            for (let x = 0; x < grid[y].length; x++) {
-                if(grid[y][x].isWall) {
-                    this.drawWall(x,y)
-                }
-            }
-        }
         window.requestAnimationFrame(this.draw.bind(this));
-        // let gradient = new Rainbow();
-        // gradient.setSpectrum('Yellow', 'Blue')
-        // gradient.setNumberRange(0,1)
-        // rects.push(new roundNode(1, 1, 63, 63, 32.5, gradient))
     }
 
     draw(time) {
@@ -167,28 +155,55 @@ export default class Visualizer extends Component {
     //#endregion
 
     //#region mouse
-    getCursorPosition(event) {
+    getCursorPositionInPixels(event) {
         const rect = canvas.getBoundingClientRect()
         const x = event.clientX - rect.left
         const y = event.clientY - rect.top
         return {x: x, y: y}
     }
 
-    handleMouseDown() {
+    getCursorPositionInGrid(event) {
+        const pos = this.getCursorPositionInPixels(event)
+        return {x: Math.floor(pos.x/resolution), y: Math.floor(pos.y/resolution)}
+    }
+
+    handleMouseDown(e) {
+        if(this.busy) return;
+
+        const cursPos = this.getCursorPositionInGrid(e)
+        const {grid} = this.state;
+        if(grid[cursPos.y][cursPos.x].isStart) {
+            this.setState({isDraggingStart: true})
+        } else if(grid[cursPos.y][cursPos.x].isFinish) {
+            this.setState({isDraggingFinish: true})
+        }
+
         this.setState({mouseIsPressed: true});
         mouseStillPressed = true;
     }
 
     handleMouseMove(e) {
+        if(this.busy) return;
+
         // console.log(this.getCursorPosition(e).x + " | " + this.getCursorPosition(e).y)
         if (!this.state.mouseIsPressed) return;
-        this.calculateWall(e);
+        if(this.state.isDraggingStart) {
+            const pos = this.getCursorPositionInGrid(e)
+            this.moveStart(pos.x,pos.y)
+        } else if(this.state.isDraggingFinish) {
+            const pos = this.getCursorPositionInGrid(e)
+            this.moveFinish(pos.x,pos.y)
+        } else {
+            this.calculateWall(e);
+        }
         mouseStillPressed = false;
     }
 
     handleMouseUp(e) {
-        this.setState({mouseIsPressed: false});
-        if(mouseStillPressed) {
+        if(this.busy) return;
+
+        this.setState({mouseIsPressed: false, isDraggingStart: false, isDraggingFinish: false});
+        if(mouseStillPressed && !this.state.isDraggingStart && !this.state.isDraggingFinish) {
             lastMousePos.x++;
             this.calculateWall(e);
         }
@@ -200,44 +215,111 @@ export default class Visualizer extends Component {
 
     animateDijkstra(visitedNodesInOrder, nodesInShortestPathOrder) {
         for (let i = 0; i < visitedNodesInOrder.length; i++) {
-            if(i === visitedNodesInOrder.length-1) {
-                timeouts.push(setTimeout(() => {
-                    this.shortPath(nodesInShortestPathOrder);
-                }, 32 * i));
-            }
+            if(i===0) continue;
             // eslint-disable-next-line no-loop-func
             timeouts.push(setTimeout(() => {
-                const node = visitedNodesInOrder[i];
-                ctx.fillStyle = 'Blue'
-                let gradient = new Rainbow();
-                gradient.setSpectrum('Yellow', 'Blue', 'Aqua')
-                gradient.setNumberRange(0,1)
-                rects.push(new roundNode(node.col*resolution+1, node.row*resolution+1, 63, 63, 32.5, gradient))
-                // this.drawCube(node.col, node.row)
-            }, 30*i))
+                if(i === visitedNodesInOrder.length-1) {
+                    this.shortPath(nodesInShortestPathOrder);
+                } else {
+                    const node = visitedNodesInOrder[i];
+                    if(speed !== "0") {
+                        let gradient = new Rainbow();
+                        gradient.setSpectrum('Yellow', 'Blue', 'Aqua')
+                        gradient.setNumberRange(0,0.6)
+                        rects.push(new roundNode(node.col*resolution+1, node.row*resolution+1, resolution-2, resolution-2, resolution/1.5, gradient))
+                    } else {
+                        ctx.fillStyle = 'Aqua'
+                        this.drawCube(node.col,node.row)
+                    }
+                }
+            }, speed*i))
         }
     }
 
     shortPath(nodesInShortestPathOrder) {
         for (let i = 0; i < nodesInShortestPathOrder.length; i++) {
+            if(i===0 || i===nodesInShortestPathOrder.length-1) continue;
             // eslint-disable-next-line no-loop-func
             timeouts.push(setTimeout(() => {
                 const node = nodesInShortestPathOrder[i];
-                let gradient = new Rainbow();
-                gradient.setSpectrum('Red', 'Yellow')
-                gradient.setNumberRange(0,1)
-                rects.push(new roundNode(node.col*resolution+1, node.row*resolution+1, 63, 63, 32.5, gradient))
-            }, 50 * i));
+                if(speed !== "0") {
+                    let gradient = new Rainbow();
+                    gradient.setSpectrum('Red', 'Yellow')
+                    gradient.setNumberRange(0,0.5)
+                    rects.push(new roundNode(node.col*resolution+1, node.row*resolution+1, resolution-2, resolution-2, resolution/1.5, gradient))
+                } else {
+                    ctx.fillStyle = 'Yellow'
+                    this.drawCube(node.col,node.row)
+                }
+            }, speed!=="0" ? 35 * i : 0));
+            timeouts.push(setTimeout(() => {
+                this.busy = false;
+            }, speed!=="0" ? 35*nodesInShortestPathOrder.length : 0))
         }
     }
 
     visualizeDijkstra() {
+        if(this.busy) return;
+        this.busy = true;
         const {grid} = this.state;
         const startNode = grid[START_NODE_ROW][START_NODE_COL];
         const finishNode = grid[FINISH_NODE_ROW][FINISH_NODE_COL];
         const visitedNodesInOrder = dijkstra(grid, startNode, finishNode);
         const nodesInShortestPathOrder = getNodesInShortestPathOrder(finishNode);
         this.animateDijkstra(visitedNodesInOrder, nodesInShortestPathOrder);
+    }
+
+    //#endregion
+
+    //#region moving start & finish
+
+    moveStart(x,y) {
+        ctx.clearRect(START_NODE_COL*resolution+1, START_NODE_ROW*resolution+1, resolution-2, resolution-2)
+        this.drawStartOrFinish(x,y, true)
+        START_NODE_COL = x;
+        START_NODE_ROW = y;
+    }
+
+    moveFinish(x,y) {
+        // const pos = this.getCursorPositionInGrid(e)
+        ctx.clearRect(FINISH_NODE_COL*resolution+1, FINISH_NODE_ROW*resolution+1, resolution-2, resolution-2)
+        this.drawStartOrFinish(x,y, false)
+        FINISH_NODE_COL = x;
+        FINISH_NODE_ROW = y;
+
+        // const prevSpeed = speed;
+        // speed = 0;
+        // this.visualizeDijkstra();
+        // speed = prevSpeed;
+    }
+
+    drawStartOrFinish(x,y, start) {
+        const {grid} = this.state;
+        const newGrid = grid.slice();
+        const node = newGrid[y][x]
+        if(start) {
+            newGrid[START_NODE_ROW][START_NODE_COL] = {
+                ...newGrid[START_NODE_ROW][START_NODE_COL],
+                isStart: false
+            }
+            newGrid[y][x] = {
+                ...node,
+                isStart: true,
+            };
+            ctx.fillStyle = 'Green'
+        } else {
+            newGrid[FINISH_NODE_ROW][FINISH_NODE_COL] = {
+                ...newGrid[FINISH_NODE_ROW][FINISH_NODE_COL],
+                isFinish: false
+            }
+            newGrid[y][x] = {
+                ...node,
+                isFinish: true,
+            };
+            ctx.fillStyle = 'Red'
+        }
+        this.drawCube(x, y)
+        this.setState({grid: newGrid})
     }
 
     //#endregion
@@ -256,11 +338,14 @@ export default class Visualizer extends Component {
     }
 
     calculateWall(e) {
-        const pos = this.getCursorPosition(e)
-        const pos2 = {x: Math.floor(pos.x/resolution), y: Math.floor(pos.y/resolution)}
-        if(lastMousePos.x === pos2.x && lastMousePos.y === pos2.y) return;
-        lastMousePos = pos2;
-        this.drawWall(pos2.x,pos2.y)
+        const pos = this.getCursorPositionInGrid(e)
+        if(this.state.grid[pos.y][pos.x].isStart || this.state.grid[pos.y][pos.x].isFinish) {
+            return;
+        }
+
+        if(lastMousePos.x === pos.x && lastMousePos.y === pos.y) return;
+        lastMousePos = pos;
+        this.drawWall(pos.x,pos.y)
     }
 
     drawWall(x,y) {
@@ -272,16 +357,66 @@ export default class Visualizer extends Component {
             isWall: !node.isWall,
         };
         if(newGrid[y][x].isWall) {
-            ctx.fillStyle = 'Black'
-            this.drawCube(x, y)
+            // ctx.fillStyle = 'Black'
+            // this.drawCube(x, y)
+            let gradient = new Rainbow();
+            gradient.setSpectrum('White', 'Black')
+            gradient.setNumberRange(0,0.5)
+            rects.push(new roundNode(node.col*resolution+1, node.row*resolution+1, resolution-2, resolution-2, resolution/1.5, gradient))
         } else {
             ctx.clearRect(x*resolution+1, y*resolution+1, resolution-2,resolution-2)
-            // this.createPartGrid(x*resolution,y*resolution);
         }
         this.setState({grid: newGrid})
     }
 
+    showStart() {
+        const {grid} = this.state;
+        for (let i = 0; i < grid.length; i++) {
+            for (let j = 0; j < grid[i].length; j++) {
+                if(grid[i][j].isStart) {
+                    console.log("Start is at x:" + j + " y:" + i)
+                }
+            }
+        }
+    }
+
+    //#region reset
+
+    clearVisualization() {
+        const {grid} = this.state;
+        for (let y = 0; y < grid.length; y++) {
+            for (let x = 0; x < grid[y].length; x++) {
+                if(!grid[y][x].isWall && !grid[y][x].isStart && !grid[y][x].isFinish) {
+                    ctx.clearRect(x*resolution+1, y*resolution+1, resolution-2, resolution-2)
+                }
+            }
+        }
+    }
+
+    resetWalls() {
+        if(this.busy) return;
+        const {grid} = this.state;
+        const newGrid = grid.slice();
+        for (let y = 0; y < grid.length; y++) {
+            for (let x = 0; x < grid[y].length; x++) {
+                if(grid[y][x].isWall) {
+                    newGrid[y][x].isWall = false;
+                    ctx.clearRect(x*resolution+1, y*resolution+1, resolution-2, resolution-2)
+                }
+            }
+        }
+    }
+
     fullReset() {
+        START_NODE_COL = 5;
+        START_NODE_ROW = 5;
+
+        FINISH_NODE_COL = 20
+        FINISH_NODE_ROW = 5;
+
+        this.busy = false;
+
+        rects = []
         this.setState({ grid: getInitialGrid() });
         ctx.clearRect(0,0,canvas.width, canvas.height)
         this.createGrid()
@@ -290,6 +425,9 @@ export default class Visualizer extends Component {
         }
         timeouts = []
     }
+
+    //#endregion
+
 
     // sliderChanged(id, val) {
     //     if(id===0) {
@@ -318,8 +456,24 @@ export default class Visualizer extends Component {
                 {/*    </>*/}
                 {/*</div>*/}
                 <div>
+                    <select id={"speed"} defaultValue={"30"} style={{textAlign: 'center'}} onChange={() => {
+                        const select = document.getElementById('speed');
+                        speed = select.options[select.selectedIndex].value
+                        console.log(select.options[select.selectedIndex].value)
+                    }}>
+                        <option value="80">Slow</option>
+                        <option value="30">Fast</option>
+                        <option value="15">Faster</option>
+                        <option value="5">Extra Fast</option>
+                        <option value="0">Instant</option>
+                    </select>
+                </div>
+                <div>
                     <button onClick={() => this.visualizeDijkstra()}>Visualize</button>
                     <button onClick={() => this.fullReset()}>Reset</button>
+                    <button onClick={() => this.resetWalls()}>Clear walls</button>
+                    <button onClick={() => this.showStart()}>Start</button>
+                    <button onClick={() => this.clearVisualization()}>Clear visualization</button>
                 </div>
                 <canvas
                     id={"canvas"}
