@@ -4,3 +4,11 @@
     /*border-right: 2px solid #14161a;*/
     /*border-bottom: 2px solid #14161a;*/
 }
+.MuiFormControl-root {
+    background: #1565c0;
+    border-radius: 4px;
+}
+
+.customSelect {
+    transform: translateY(-25%)
+}

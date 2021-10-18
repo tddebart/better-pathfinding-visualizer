@@ -4,6 +4,7 @@ import {dijkstra, getNodesInShortestPathOrder} from '../algorithms/dijkstra'
 import {recursiveDivisionMaze} from '../mazeAlgorithms/recursive'
 import 'rc-slider/assets/index.css';
 import Rainbow from 'rainbowvis.js'
+import {ButtonGroup, Button, Select, MenuItem, InputLabel, FormControl} from "@mui/material";
 
 const resolution = 29
 let width = getWidth()
@@ -25,7 +26,7 @@ let speed = 0;
 const FRAMES_PER_SECOND = 60;  // Valid values are 60,30,20,15,10...
 // set the mim time to render the next frame
 const FRAME_MIN_TIME = (1000/60) * (60 / FRAMES_PER_SECOND) - (1000/60) * 0.5;
-var lastFrameTime = 0;  // the last frame time
+let lastFrameTime = 0;  // the last frame time
 
 let lastMousePos = {x:0,y:0}
 
@@ -521,28 +522,44 @@ export default class Visualizer extends Component {
                 {/*    </>*/}
                 {/*</div>*/}
                 <div>
-                    <select id={"speed"} defaultValue={"0"} style={{textAlign: 'center'}} onChange={() => {
-                        const select = document.getElementById('speed');
-                        speed = select.options[select.selectedIndex].value
-                        console.log(select.options[select.selectedIndex].value)
-                    }}>
-                        <option value="80">Slow</option>
-                        <option value="30">Fast</option>
-                        <option value="15">Faster</option>
-                        <option value="5">Extra Fast</option>
-                        <option value="0">Instant</option>
-                    </select>
+                    <FormControl variant={'standard'} sx={{ m: 1, minWidth: 80 }}>
+                        <InputLabel id="demo-simple-select-label">Speeds</InputLabel>
+                        <Select id={"speed"} defaultValue={"0"} style={{textAlign: 'center'}} onChange={(event) => {
+                            speed = event.target.value;
+                            console.log( event.target.value)
+                        }}>
+                            <MenuItem value="80">Slow</MenuItem>
+                            <MenuItem value="30">Fast</MenuItem>
+                            <MenuItem value="15">Faster</MenuItem>
+                            <MenuItem value="5">Extra Fast</MenuItem>
+                            <MenuItem value="0">Instant</MenuItem>
+                        </Select>
+                    </FormControl>
                 </div>
                 <div>
-                    <button onClick={() => this.visualizeDijkstra()}>Visualize</button>
-                    <button onClick={() => this.fullReset()}>Reset</button>
-                    <button onClick={() => this.resetWalls()}>Clear walls</button>
-                    <button onClick={() => this.showStart()}>Start</button>
-                    <button onClick={() => this.clearVisualization()}>Clear path</button>
+                    <FormControl className={"customSelect"} variant={'standard'} sx={{ m: 1, minWidth: 80 }}>
+                        <InputLabel id="demo-simple-select-label">Algorithms</InputLabel>
+                        <Select
+                            labelId="demo-simple-select-label"
+                            id="demo-simple-select"
+                            label="Algorithms"
+                            defaultValue={0}
+                        >
+                                <MenuItem value={0}>Dijkstra algorithm</MenuItem>
+                                <MenuItem value={1}>C* algorithm</MenuItem>
+                        </Select>
+                    </FormControl>
+                    <ButtonGroup variant="contained">
+                        <Button onClick={() => this.visualizeDijkstra()}>Visualize</Button>
+                        <Button onClick={() => this.fullReset()}>Reset</Button>
+                        <Button onClick={() => this.resetWalls()}>Clear walls</Button>
+                        <Button onClick={() => this.showStart()}>Start</Button>
+                        <Button onClick={() => this.clearVisualization()}>Clear path</Button>
+                    </ButtonGroup>
                 </div>
-                <div>
-                    <button onClick={() => this.visualizeMaze()}>Generate maze</button>
-                </div>
+                <ButtonGroup variant="contained" style={{transform: "translateY(-25%)"}}>
+                    <Button onClick={() => this.visualizeMaze()}>Generate maze</Button>
+                </ButtonGroup>
                 <canvas
                     id={"canvas"}
                     // onClick={(e) =>  this.calculateWall(e)}
