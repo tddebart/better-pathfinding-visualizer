@@ -1,6 +1,7 @@
 import React, {Component} from 'react';
 import "./visualizer.css"
 import {dijkstra, getNodesInShortestPathOrder} from '../algorithms/dijkstra'
+import {greedyBFS, getNodesInShortestPathOrderGreedyBFS} from '../algorithms/greedyBestFirstSearch'
 import {recursiveDivisionMaze} from '../mazeAlgorithms/recursive'
 import 'rc-slider/assets/index.css';
 import Rainbow from 'rainbowvis.js'
@@ -130,6 +131,7 @@ export default class Visualizer extends Component {
         this.setState({ grid: getInitialGrid() });
         this.createGrid();
         window.addEventListener('resize', this.resize)
+        this.algorithm = 0;
     }
 
     //#region grid
@@ -240,7 +242,7 @@ export default class Visualizer extends Component {
 
     //#region dijkstra visual
 
-    animateDijkstra(visitedNodesInOrder, nodesInShortestPathOrder, instant = false) {
+    animateAlgorithm(visitedNodesInOrder, nodesInShortestPathOrder, instant = false) {
         this.clearVisualization(true);
         for (let i = 0; i < visitedNodesInOrder.length; i++) {
             if(i===0) continue;
@@ -294,7 +296,26 @@ export default class Visualizer extends Component {
         const finishNode = grid[FINISH_NODE_ROW][FINISH_NODE_COL];
         const visitedNodesInOrder = dijkstra(grid, startNode, finishNode);
         const nodesInShortestPathOrder = getNodesInShortestPathOrder(finishNode);
-        this.animateDijkstra(visitedNodesInOrder, nodesInShortestPathOrder, instant);
+        this.animateAlgorithm(visitedNodesInOrder, nodesInShortestPathOrder, instant);
+    }
+
+    visualizeGreedyBFS(instant = false) {
+        if(this.busy) return;
+        this.busy = true;
+        const {grid} = this.state;
+        const startNode = grid[START_NODE_ROW][START_NODE_COL];
+        const finishNode = grid[FINISH_NODE_ROW][FINISH_NODE_COL];
+        const visitedNodesInOrder = greedyBFS(grid, startNode, finishNode);
+        const nodesInShortestPathOrder = getNodesInShortestPathOrderGreedyBFS(finishNode);
+        this.animateAlgorithm(visitedNodesInOrder, nodesInShortestPathOrder, instant);
+    }
+
+    visualize(instant = false) {
+        if(this.algorithm === 0) {
+            this.visualizeDijkstra(instant)
+        } else if(this.algorithm === 1) {
+            this.visualizeGreedyBFS(instant)
+        }
     }
 
     //#endregion
@@ -554,13 +575,16 @@ export default class Visualizer extends Component {
                             id="demo-simple-select"
                             label="Algorithms"
                             defaultValue={0}
+                            onChange={(event) => {
+                                this.algorithm = event.target.value;
+                            }}
                         >
                                 <MenuItem value={0}>Dijkstra algorithm</MenuItem>
-                                <MenuItem value={1}>C* algorithm</MenuItem>
+                                <MenuItem value={1}>Greedy best first search</MenuItem>
                         </Select>
                     </FormControl>
                     <ButtonGroup variant="contained">
-                        <Button onClick={() => this.visualizeDijkstra()}>Visualize</Button>
+                        <Button onClick={() => this.visualize()}>Visualize</Button>
                         <Button onClick={() => this.fullReset()}>Reset</Button>
                         <Button onClick={() => this.resetWalls()}>Clear walls</Button>
                         <Button onClick={() => this.clearVisualization()}>Clear path</Button>
