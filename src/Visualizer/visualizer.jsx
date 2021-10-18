@@ -16,12 +16,13 @@ let START_NODE_ROW = 5;
 let FINISH_NODE_COL = 20
 let FINISH_NODE_ROW = 5;
 
+// the setTimeouts that are currently waiting
 let timeouts = [];
 
 let canvas;
 let ctx;
 
-let speed = 0;
+let speed = 5;
 
 const FRAMES_PER_SECOND = 60;  // Valid values are 60,30,20,15,10...
 // set the mim time to render the next frame
@@ -213,13 +214,12 @@ export default class Visualizer extends Component {
         if(this.busy) return;
 
         // console.log(this.getCursorPosition(e).x + " | " + this.getCursorPosition(e).y)
+        const pos = this.getCursorPositionInGrid(e);
         if (!this.state.mouseIsPressed) return;
         if(this.state.isDraggingStart) {
-            const pos = this.getCursorPositionInGrid(e)
-            this.moveStart(pos.x,pos.y)
+            this.moveStartOrFinish(pos.x,pos.y, true)
         } else if(this.state.isDraggingFinish) {
-            const pos = this.getCursorPositionInGrid(e)
-            this.moveFinish(pos.x,pos.y)
+            this.moveStartOrFinish(pos.x,pos.y,false)
         } else {
             this.calculateWall(e);
         }
@@ -240,53 +240,53 @@ export default class Visualizer extends Component {
 
     //#region dijkstra visual
 
-    animateDijkstra(visitedNodesInOrder, nodesInShortestPathOrder) {
+    animateDijkstra(visitedNodesInOrder, nodesInShortestPathOrder, instant = false) {
         this.clearVisualization(true);
         for (let i = 0; i < visitedNodesInOrder.length; i++) {
             if(i===0) continue;
             // eslint-disable-next-line no-loop-func
             timeouts.push(setTimeout(() => {
                 if(i === visitedNodesInOrder.length-1) {
-                    this.shortPath(nodesInShortestPathOrder);
+                    this.shortPath(nodesInShortestPathOrder, instant);
                 } else {
                     const node = visitedNodesInOrder[i];
-                    if(speed !== "0") {
+                    if (speed === "0" || instant) {
+                        ctx.fillStyle = 'Aqua'
+                        this.drawCube(node.col, node.row)
+                    } else {
                         let gradient = new Rainbow();
                         gradient.setSpectrum('Yellow', 'Blue', 'Aqua')
-                        gradient.setNumberRange(0,0.6)
-                        rects.push(new roundNode(node.col*resolution+1, node.row*resolution+1, resolution-2, resolution-2, resolution/1.5, gradient))
-                    } else {
-                        ctx.fillStyle = 'Aqua'
-                        this.drawCube(node.col,node.row)
+                        gradient.setNumberRange(0, 0.6)
+                        rects.push(new roundNode(node.col * resolution + 1, node.row * resolution + 1, resolution - 2, resolution - 2, resolution / 1.5, gradient))
                     }
                 }
             }, speed*i))
         }
     }
 
-    shortPath(nodesInShortestPathOrder) {
+    shortPath(nodesInShortestPathOrder, instant = false) {
         for (let i = 0; i < nodesInShortestPathOrder.length; i++) {
             if(i===0 || i===nodesInShortestPathOrder.length-1) continue;
             // eslint-disable-next-line no-loop-func
             timeouts.push(setTimeout(() => {
                 const node = nodesInShortestPathOrder[i];
-                if(speed !== "0") {
+                if (speed === "0" || instant) {
+                    ctx.fillStyle = 'Yellow'
+                    this.drawCube(node.col, node.row)
+                } else {
                     let gradient = new Rainbow();
                     gradient.setSpectrum('Red', 'Yellow')
-                    gradient.setNumberRange(0,0.5)
-                    rects.push(new roundNode(node.col*resolution+1, node.row*resolution+1, resolution-2, resolution-2, resolution/1.5, gradient))
-                } else {
-                    ctx.fillStyle = 'Yellow'
-                    this.drawCube(node.col,node.row)
+                    gradient.setNumberRange(0, 0.5)
+                    rects.push(new roundNode(node.col * resolution + 1, node.row * resolution + 1, resolution - 2, resolution - 2, resolution / 1.5, gradient))
                 }
-            }, speed!=="0" ? 35 * i : 0));
+            }, speed!=="0" || instant ? 35 * i : 0));
             timeouts.push(setTimeout(() => {
                 this.busy = false;
-            }, speed!=="0" ? 35*nodesInShortestPathOrder.length : 0))
+            }, speed!=="0" || instant ? 35*nodesInShortestPathOrder.length : 0))
         }
     }
 
-    visualizeDijkstra() {
+    visualizeDijkstra(instant = false) {
         if(this.busy) return;
         this.busy = true;
         const {grid} = this.state;
@@ -294,37 +294,47 @@ export default class Visualizer extends Component {
         const finishNode = grid[FINISH_NODE_ROW][FINISH_NODE_COL];
         const visitedNodesInOrder = dijkstra(grid, startNode, finishNode);
         const nodesInShortestPathOrder = getNodesInShortestPathOrder(finishNode);
-        this.animateDijkstra(visitedNodesInOrder, nodesInShortestPathOrder);
+        this.animateDijkstra(visitedNodesInOrder, nodesInShortestPathOrder, instant);
     }
 
     //#endregion
 
     //#region moving start & finish
 
-    moveStart(x,y) {
-        ctx.clearRect(START_NODE_COL*resolution+1, START_NODE_ROW*resolution+1, resolution-2, resolution-2)
-        this.drawStartOrFinish(x,y, true)
-        START_NODE_COL = x;
-        START_NODE_ROW = y;
-    }
-
-    moveFinish(x,y) {
-        // const pos = this.getCursorPositionInGrid(e)
-        ctx.clearRect(FINISH_NODE_COL*resolution+1, FINISH_NODE_ROW*resolution+1, resolution-2, resolution-2)
-        this.drawStartOrFinish(x,y, false)
-        FINISH_NODE_COL = x;
-        FINISH_NODE_ROW = y;
-
-        // const prevSpeed = speed;
-        // speed = 0;
-        // this.visualizeDijkstra();
-        // speed = prevSpeed;
+    moveStartOrFinish(x,y,start) {
+        let col
+        let row
+        if(start) {
+            col = START_NODE_COL;
+            row = START_NODE_ROW;
+        } else {
+            col = FINISH_NODE_COL;
+            row = FINISH_NODE_ROW
+        }
+        if(lastMousePos.x === x && lastMousePos.y === y) return;
+        lastMousePos = {x:x,y:y};
+        ctx.clearRect(col*resolution+1, row*resolution+1, resolution-2, resolution-2)
+        this.drawStartOrFinish(x,y, start)
+        if(this.state.grid[row][col].isWall) {
+            const newGrid = this.state.grid.slice()
+            newGrid[row][col].isWall = false;
+            this.setState({grid: newGrid})
+            this.drawWall(col,row)
+        }
+        if(start) {
+            START_NODE_COL = x;
+            START_NODE_ROW = y;
+        } else {
+            FINISH_NODE_COL = x;
+            FINISH_NODE_ROW = y;
+        }
     }
 
     drawStartOrFinish(x,y, start) {
         const {grid} = this.state;
         const newGrid = grid.slice();
         const node = newGrid[y][x]
+
         if(start) {
             newGrid[START_NODE_ROW][START_NODE_COL] = {
                 ...newGrid[START_NODE_ROW][START_NODE_COL],
@@ -371,6 +381,7 @@ export default class Visualizer extends Component {
 
             }
         }
+        this.redrawStartAndFinish()
     }
 
     drawLine(x,y, xd, yd) {
@@ -428,17 +439,6 @@ export default class Visualizer extends Component {
         this.setState({grid: newGrid})
     }
 
-    showStart() {
-        const {grid} = this.state;
-        for (let i = 0; i < grid.length; i++) {
-            for (let j = 0; j < grid[i].length; j++) {
-                if(grid[i][j].isStart) {
-                    console.log("Start is at x:" + j + " y:" + i)
-                }
-            }
-        }
-    }
-
     //#region reset
 
     clearVisualization(skipBusyCheck = false) {
@@ -455,6 +455,17 @@ export default class Visualizer extends Component {
                 newGrid[y][x].distance = Infinity;
             }
         }
+        this.setState({grid: newGrid})
+    }
+
+    redrawStartAndFinish() {
+        ctx.fillStyle = 'Green'
+        this.drawCube(START_NODE_COL,START_NODE_ROW)
+        ctx.fillStyle = 'Red'
+        this.drawCube(FINISH_NODE_COL,FINISH_NODE_ROW)
+        const newGrid = this.state.grid.slice()
+        newGrid[START_NODE_ROW][START_NODE_COL].isWall = false;
+        newGrid[FINISH_NODE_ROW][FINISH_NODE_COL].isWall = false;
         this.setState({grid: newGrid})
     }
 
@@ -524,9 +535,8 @@ export default class Visualizer extends Component {
                 <div>
                     <FormControl variant={'standard'} sx={{ m: 1, minWidth: 80 }}>
                         <InputLabel id="demo-simple-select-label">Speeds</InputLabel>
-                        <Select id={"speed"} defaultValue={"0"} style={{textAlign: 'center'}} onChange={(event) => {
+                        <Select id={"speed"} defaultValue={"5"} style={{textAlign: 'center'}} onChange={(event) => {
                             speed = event.target.value;
-                            console.log( event.target.value)
                         }}>
                             <MenuItem value="80">Slow</MenuItem>
                             <MenuItem value="30">Fast</MenuItem>
@@ -553,7 +563,6 @@ export default class Visualizer extends Component {
                         <Button onClick={() => this.visualizeDijkstra()}>Visualize</Button>
                         <Button onClick={() => this.fullReset()}>Reset</Button>
                         <Button onClick={() => this.resetWalls()}>Clear walls</Button>
-                        <Button onClick={() => this.showStart()}>Start</Button>
                         <Button onClick={() => this.clearVisualization()}>Clear path</Button>
                     </ButtonGroup>
                 </div>
