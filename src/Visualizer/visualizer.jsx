@@ -1,12 +1,13 @@
 import React, {Component} from 'react';
 import "./visualizer.css"
 import {dijkstra, getNodesInShortestPathOrder} from '../algorithms/dijkstra'
+import {recursiveDivisionMaze} from '../mazeAlgorithms/recursive'
 import 'rc-slider/assets/index.css';
 import Rainbow from 'rainbowvis.js'
 
 const resolution = 29
-const width = Math.floor(window.innerWidth*0.98);
-const height =  Math.floor(window.innerHeight*0.9);
+let width = getWidth()
+let height =  getHeight()
 
 let START_NODE_COL = 5;
 let START_NODE_ROW = 5;
@@ -19,7 +20,7 @@ let timeouts = [];
 let canvas;
 let ctx;
 
-let speed = 30;
+let speed = 0;
 
 const FRAMES_PER_SECOND = 60;  // Valid values are 60,30,20,15,10...
 // set the mim time to render the next frame
@@ -31,6 +32,26 @@ let lastMousePos = {x:0,y:0}
 let mouseStillPressed = false;
 
 let rects = [];
+
+function getWidth() {
+    let howManyCells = 0
+    let less = 0
+    while(howManyCells % 2 === 0) {
+        howManyCells = Math.floor(window.innerWidth/resolution)-less;
+        less++
+    }
+    return howManyCells*resolution;
+}
+
+function getHeight() {
+    let howManyCells = 0
+    let less = 0
+    while(howManyCells % 2 === 0) {
+        howManyCells = Math.floor(window.innerHeight*0.85/resolution)-less;
+        less++
+    }
+    return howManyCells*resolution;
+}
 
 class roundNode {
     constructor(x, y, width, height, radius, gradient) {
@@ -73,8 +94,8 @@ class roundNode {
         ctx.fill()
 
 
-        if(this.radius >= 0) {
-            this.radius -= 0.5417
+        if(this.radius > 0) {
+            this.radius -= 0.56
         } else {
             rects.splice(rects.indexOf(this), 1);
         }
@@ -92,7 +113,12 @@ export default class Visualizer extends Component {
         };
     }
 
-    resize = () => this.forceUpdate()
+    resize = () =>  {
+        width = getWidth();
+        height = getHeight();
+        this.forceUpdate()
+        this.fullReset()
+    }
 
     componentWillUnmount() {
         window.removeEventListener('resize', this.resize)
@@ -214,6 +240,7 @@ export default class Visualizer extends Component {
     //#region dijkstra visual
 
     animateDijkstra(visitedNodesInOrder, nodesInShortestPathOrder) {
+        this.clearVisualization(true);
         for (let i = 0; i < visitedNodesInOrder.length; i++) {
             if(i===0) continue;
             // eslint-disable-next-line no-loop-func
@@ -324,6 +351,27 @@ export default class Visualizer extends Component {
 
     //#endregion
 
+    visualizeMaze() {
+        if(this.busy) return;
+        this.resetWalls()
+        this.clearVisualization()
+        const {grid} = this.state;
+        const startNode = grid[START_NODE_ROW][START_NODE_COL];
+        const finishNode = grid[FINISH_NODE_ROW][FINISH_NODE_COL];
+        const maze = recursiveDivisionMaze(grid, startNode,finishNode)
+        if(speed === "0") {
+            for (const mazeElement of maze) {
+                this.drawWall(mazeElement[0], mazeElement[1])
+            }
+        } else {
+            for (let i = 0; i < maze.length; i++) {
+                const mazeElement = maze[i]
+                timeouts.push(setTimeout(() => this.drawWall(mazeElement[0], mazeElement[1]), speed*i))
+
+            }
+        }
+    }
+
     drawLine(x,y, xd, yd) {
         ctx.beginPath();
         ctx.moveTo(x,y)
@@ -351,6 +399,11 @@ export default class Visualizer extends Component {
     drawWall(x,y) {
         const {grid} = this.state;
         const newGrid = grid.slice();
+        let widthIn = Math.round(width/resolution)-1
+        let heightIn = Math.round(height/resolution)-1
+        if(x > widthIn || x < 0 || y > heightIn || y < 0) {
+            return;
+        }
         const node = newGrid[y][x]
         newGrid[y][x] = {
             ...node,
@@ -359,10 +412,15 @@ export default class Visualizer extends Component {
         if(newGrid[y][x].isWall) {
             // ctx.fillStyle = 'Black'
             // this.drawCube(x, y)
-            let gradient = new Rainbow();
-            gradient.setSpectrum('White', 'Black')
-            gradient.setNumberRange(0,0.5)
-            rects.push(new roundNode(node.col*resolution+1, node.row*resolution+1, resolution-2, resolution-2, resolution/1.5, gradient))
+            if(speed !== "0") {
+                let gradient = new Rainbow();
+                gradient.setSpectrum('White', 'Black')
+                gradient.setNumberRange(0,0.5)
+                rects.push(new roundNode(node.col*resolution+1, node.row*resolution+1, resolution-2, resolution-2, resolution/1.5, gradient))
+            } else {
+                ctx.fillStyle = 'Black'
+                this.drawCube(x, y)
+            }
         } else {
             ctx.clearRect(x*resolution+1, y*resolution+1, resolution-2,resolution-2)
         }
@@ -382,19 +440,26 @@ export default class Visualizer extends Component {
 
     //#region reset
 
-    clearVisualization() {
+    clearVisualization(skipBusyCheck = false) {
+        if(!skipBusyCheck && this.busy) return;
+        rects = [];
         const {grid} = this.state;
+        const newGrid = grid.slice()
         for (let y = 0; y < grid.length; y++) {
             for (let x = 0; x < grid[y].length; x++) {
                 if(!grid[y][x].isWall && !grid[y][x].isStart && !grid[y][x].isFinish) {
                     ctx.clearRect(x*resolution+1, y*resolution+1, resolution-2, resolution-2)
                 }
+                newGrid[y][x].isVisited = false;
+                newGrid[y][x].distance = Infinity;
             }
         }
+        this.setState({grid: newGrid})
     }
 
-    resetWalls() {
-        if(this.busy) return;
+    resetWalls(skipBusyCheck = false) {
+        if(!skipBusyCheck && this.busy) return;
+        rects = [];
         const {grid} = this.state;
         const newGrid = grid.slice();
         for (let y = 0; y < grid.length; y++) {
@@ -456,7 +521,7 @@ export default class Visualizer extends Component {
                 {/*    </>*/}
                 {/*</div>*/}
                 <div>
-                    <select id={"speed"} defaultValue={"30"} style={{textAlign: 'center'}} onChange={() => {
+                    <select id={"speed"} defaultValue={"0"} style={{textAlign: 'center'}} onChange={() => {
                         const select = document.getElementById('speed');
                         speed = select.options[select.selectedIndex].value
                         console.log(select.options[select.selectedIndex].value)
@@ -473,7 +538,10 @@ export default class Visualizer extends Component {
                     <button onClick={() => this.fullReset()}>Reset</button>
                     <button onClick={() => this.resetWalls()}>Clear walls</button>
                     <button onClick={() => this.showStart()}>Start</button>
-                    <button onClick={() => this.clearVisualization()}>Clear visualization</button>
+                    <button onClick={() => this.clearVisualization()}>Clear path</button>
+                </div>
+                <div>
+                    <button onClick={() => this.visualizeMaze()}>Generate maze</button>
                 </div>
                 <canvas
                     id={"canvas"}
@@ -500,6 +568,11 @@ const createNode = (col, row) => {
         isWall: false,
         prevNode: null,
     }
+}
+
+// eslint-disable-next-line no-unused-vars
+function randomNumber(min, max) {
+    return Math.floor(Math.random() * (max - min) + min);
 }
 
 const getInitialGrid = () => {
