@@ -3,12 +3,32 @@
     /*height: 50%;*/
     /*border-right: 2px solid #14161a;*/
     /*border-bottom: 2px solid #14161a;*/
+    transform: translateY(3.5%)
 }
 .MuiFormControl-root {
     background: #1565c0;
     border-radius: 4px;
 }
 
-.customSelect {
-    transform: translateY(-25%)
+/*.customSelect {*/
+/*    transform: translateY(-25%)*/
+/*}*/
+
+.github {
+    /*position: absolute;*/
+    /*top: 25px;*/
+    /*left: 25px;*/
+    width:40px;
+    height:40px;
+}
+
+.center {
+    position: absolute;
+    right: 50%;
+    transform: translateX(50%);
+    width: 5000px;
+}
+
+.buttonDown {
+    transform: translateY(10%)
 }

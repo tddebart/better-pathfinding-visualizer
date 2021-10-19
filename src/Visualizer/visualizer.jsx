@@ -1,11 +1,30 @@
 import React, {Component} from 'react';
 import "./visualizer.css"
+
+// Pathfinding
 import {dijkstra, getNodesInShortestPathOrder} from '../algorithms/dijkstra'
 import {greedyBFS, getNodesInShortestPathOrderGreedyBFS} from '../algorithms/greedyBestFirstSearch'
+import {astar, getNodesInShortestPathOrderAstar} from '../algorithms/aStar'
+
+// Maze
 import {recursiveDivisionMaze} from '../mazeAlgorithms/recursive'
+import {randomMaze} from '../mazeAlgorithms/randomMaze'
+
+// Visual and useful
 import 'rc-slider/assets/index.css';
 import Rainbow from 'rainbowvis.js'
-import {ButtonGroup, Button, Select, MenuItem, InputLabel, FormControl} from "@mui/material";
+import {
+    ButtonGroup,
+    Button,
+    Select,
+    MenuItem,
+    InputLabel,
+    FormControl,
+    AppBar,
+    Toolbar,
+    Typography, Container
+} from "@mui/material";
+import gitLogo from "../GitHub-Mark-64px.png";
 
 const resolution = 29
 let width = getWidth()
@@ -50,7 +69,7 @@ function getHeight() {
     let howManyCells = 0
     let less = 0
     while(howManyCells % 2 === 0) {
-        howManyCells = Math.floor(window.innerHeight*0.85/resolution)-less;
+        howManyCells = Math.floor(window.innerHeight*0.95/resolution)-less;
         less++
     }
     return howManyCells*resolution;
@@ -116,7 +135,7 @@ export default class Visualizer extends Component {
         };
     }
 
-    resize = () =>  {
+    resize = () => {
         width = getWidth();
         height = getHeight();
         this.forceUpdate()
@@ -128,10 +147,11 @@ export default class Visualizer extends Component {
     }
 
     componentDidMount() {
-        this.setState({ grid: getInitialGrid() });
+        this.setState({grid: getInitialGrid()});
         this.createGrid();
         window.addEventListener('resize', this.resize)
         this.algorithm = 0;
+        this.maze = 0;
     }
 
     //#region grid
@@ -143,28 +163,28 @@ export default class Visualizer extends Component {
         canvas.width = width
         canvas.height = height
 
-        for (let y = 0; y < canvas.height; y+= resolution) {
-            for (let x = 0; x < canvas.width; x+= resolution) {
-                this.createPartGrid(x,y)
-                if(x/resolution === START_NODE_COL && y/resolution === START_NODE_ROW) {
+        for (let y = 0; y < canvas.height; y += resolution) {
+            for (let x = 0; x < canvas.width; x += resolution) {
+                this.createPartGrid(x, y)
+                if (x / resolution === START_NODE_COL && y / resolution === START_NODE_ROW) {
                     ctx.fillStyle = 'Green'
-                    this.drawCube(x/resolution,y/resolution)
+                    this.drawCube(x / resolution, y / resolution)
                 }
-                if(x/resolution === FINISH_NODE_COL && y/resolution === FINISH_NODE_ROW) {
+                if (x / resolution === FINISH_NODE_COL && y / resolution === FINISH_NODE_ROW) {
                     ctx.fillStyle = 'Red'
-                    this.drawCube(x/resolution,y/resolution)
+                    this.drawCube(x / resolution, y / resolution)
                 }
             }
         }
-        this.drawLine(0,canvas.height,canvas.width,canvas.height)
-        this.drawLine(canvas.width,0,canvas.width,canvas.height)
+        this.drawLine(0, canvas.height, canvas.width, canvas.height)
+        this.drawLine(canvas.width, 0, canvas.width, canvas.height)
 
         window.requestAnimationFrame(this.draw.bind(this));
     }
 
     draw(time) {
         const deltaTime = time - lastFrameTime
-        if(deltaTime < FRAME_MIN_TIME) {
+        if (deltaTime < FRAME_MIN_TIME) {
             window.requestAnimationFrame(this.draw.bind(this));
             return;
         }
@@ -176,10 +196,10 @@ export default class Visualizer extends Component {
         window.requestAnimationFrame(this.draw.bind(this));
     }
 
-    createPartGrid(x,y) {
+    createPartGrid(x, y) {
         ctx.strokeStyle = 'Black'
-        this.drawLine(x,y, x, y+resolution)
-        this.drawLine(x,y, x+resolution, y)
+        this.drawLine(x, y, x, y + resolution)
+        this.drawLine(x, y, x + resolution, y)
     }
 
     //#endregion
@@ -194,17 +214,17 @@ export default class Visualizer extends Component {
 
     getCursorPositionInGrid(event) {
         const pos = this.getCursorPositionInPixels(event)
-        return {x: Math.floor(pos.x/resolution), y: Math.floor(pos.y/resolution)}
+        return {x: Math.floor(pos.x / resolution), y: Math.floor(pos.y / resolution)}
     }
 
     handleMouseDown(e) {
-        if(this.busy) return;
+        if (this.busy) return;
 
         const cursPos = this.getCursorPositionInGrid(e)
         const {grid} = this.state;
-        if(grid[cursPos.y][cursPos.x].isStart) {
+        if (grid[cursPos.y][cursPos.x].isStart) {
             this.setState({isDraggingStart: true})
-        } else if(grid[cursPos.y][cursPos.x].isFinish) {
+        } else if (grid[cursPos.y][cursPos.x].isFinish) {
             this.setState({isDraggingFinish: true})
         }
 
@@ -213,15 +233,15 @@ export default class Visualizer extends Component {
     }
 
     handleMouseMove(e) {
-        if(this.busy) return;
+        if (this.busy) return;
 
         // console.log(this.getCursorPosition(e).x + " | " + this.getCursorPosition(e).y)
         const pos = this.getCursorPositionInGrid(e);
         if (!this.state.mouseIsPressed) return;
-        if(this.state.isDraggingStart) {
-            this.moveStartOrFinish(pos.x,pos.y, true)
-        } else if(this.state.isDraggingFinish) {
-            this.moveStartOrFinish(pos.x,pos.y,false)
+        if (this.state.isDraggingStart) {
+            this.moveStartOrFinish(pos.x, pos.y, true)
+        } else if (this.state.isDraggingFinish) {
+            this.moveStartOrFinish(pos.x, pos.y, false)
         } else {
             this.calculateWall(e);
         }
@@ -229,10 +249,10 @@ export default class Visualizer extends Component {
     }
 
     handleMouseUp(e) {
-        if(this.busy) return;
+        if (this.busy) return;
 
         this.setState({mouseIsPressed: false, isDraggingStart: false, isDraggingFinish: false});
-        if(mouseStillPressed && !this.state.isDraggingStart && !this.state.isDraggingFinish) {
+        if (mouseStillPressed && !this.state.isDraggingStart && !this.state.isDraggingFinish) {
             lastMousePos.x++;
             this.calculateWall(e);
         }
@@ -245,10 +265,10 @@ export default class Visualizer extends Component {
     animateAlgorithm(visitedNodesInOrder, nodesInShortestPathOrder, instant = false) {
         this.clearVisualization(true);
         for (let i = 0; i < visitedNodesInOrder.length; i++) {
-            if(i===0) continue;
+            if (i === 0) continue;
             // eslint-disable-next-line no-loop-func
             timeouts.push(setTimeout(() => {
-                if(i === visitedNodesInOrder.length-1) {
+                if (i === visitedNodesInOrder.length - 1) {
                     this.shortPath(nodesInShortestPathOrder, instant);
                 } else {
                     const node = visitedNodesInOrder[i];
@@ -262,7 +282,7 @@ export default class Visualizer extends Component {
                         rects.push(new roundNode(node.col * resolution + 1, node.row * resolution + 1, resolution - 2, resolution - 2, resolution / 1.5, gradient))
                     }
                 }
-            }, speed*i))
+            }, speed * i))
         }
     }
 
@@ -288,34 +308,29 @@ export default class Visualizer extends Component {
         }
     }
 
-    visualizeDijkstra(instant = false) {
-        if(this.busy) return;
-        this.busy = true;
-        const {grid} = this.state;
-        const startNode = grid[START_NODE_ROW][START_NODE_COL];
-        const finishNode = grid[FINISH_NODE_ROW][FINISH_NODE_COL];
-        const visitedNodesInOrder = dijkstra(grid, startNode, finishNode);
-        const nodesInShortestPathOrder = getNodesInShortestPathOrder(finishNode);
-        this.animateAlgorithm(visitedNodesInOrder, nodesInShortestPathOrder, instant);
-    }
-
-    visualizeGreedyBFS(instant = false) {
-        if(this.busy) return;
-        this.busy = true;
-        const {grid} = this.state;
-        const startNode = grid[START_NODE_ROW][START_NODE_COL];
-        const finishNode = grid[FINISH_NODE_ROW][FINISH_NODE_COL];
-        const visitedNodesInOrder = greedyBFS(grid, startNode, finishNode);
-        const nodesInShortestPathOrder = getNodesInShortestPathOrderGreedyBFS(finishNode);
-        this.animateAlgorithm(visitedNodesInOrder, nodesInShortestPathOrder, instant);
-    }
-
     visualize(instant = false) {
+        if(this.busy) return;
+        this.busy = true;
+        const {grid} = this.state;
+        const startNode = grid[START_NODE_ROW][START_NODE_COL];
+        const finishNode = grid[FINISH_NODE_ROW][FINISH_NODE_COL];
+        let visitedNodesInOrder;
+        let nodesInShortestPathOrder;
+
         if(this.algorithm === 0) {
-            this.visualizeDijkstra(instant)
+            visitedNodesInOrder = dijkstra(grid, startNode, finishNode);
+            nodesInShortestPathOrder = getNodesInShortestPathOrder(finishNode);
         } else if(this.algorithm === 1) {
-            this.visualizeGreedyBFS(instant)
+            visitedNodesInOrder = greedyBFS(grid, startNode, finishNode);
+            nodesInShortestPathOrder = getNodesInShortestPathOrderGreedyBFS(finishNode);
+        } else if(this.algorithm === 2) {
+            visitedNodesInOrder = astar(grid, startNode, finishNode);
+            nodesInShortestPathOrder = getNodesInShortestPathOrderAstar(finishNode);
+        } else if(this.algorithm === 3) {
+
         }
+
+        this.animateAlgorithm(visitedNodesInOrder, nodesInShortestPathOrder, instant);
     }
 
     //#endregion
@@ -387,22 +402,29 @@ export default class Visualizer extends Component {
         if(this.busy) return;
         this.resetWalls()
         this.clearVisualization()
+        this.busy = true;
         const {grid} = this.state;
         const startNode = grid[START_NODE_ROW][START_NODE_COL];
         const finishNode = grid[FINISH_NODE_ROW][FINISH_NODE_COL];
-        const maze = recursiveDivisionMaze(grid, startNode,finishNode)
+        let maze;
+        if(this.maze === 0) {
+            maze = recursiveDivisionMaze(grid, startNode,finishNode)
+        } else if (this.maze === 1) {
+            maze = randomMaze(grid,startNode,finishNode)
+        }
         if(speed === "0") {
             for (const mazeElement of maze) {
                 this.drawWall(mazeElement[0], mazeElement[1])
             }
+            this.redrawStartAndFinish()
         } else {
             for (let i = 0; i < maze.length; i++) {
                 const mazeElement = maze[i]
                 timeouts.push(setTimeout(() => this.drawWall(mazeElement[0], mazeElement[1]), speed*i))
 
             }
+            timeouts.push(setTimeout(() => {this.redrawStartAndFinish(); this.busy = false;}, speed*(maze.length+2)))
         }
-        this.redrawStartAndFinish()
     }
 
     drawLine(x,y, xd, yd) {
@@ -553,46 +575,72 @@ export default class Visualizer extends Component {
                 {/*        <label>{height}</label>*/}
                 {/*    </>*/}
                 {/*</div>*/}
-                <div>
-                    <FormControl variant={'standard'} sx={{ m: 1, minWidth: 80 }}>
-                        <InputLabel id="demo-simple-select-label">Speeds</InputLabel>
-                        <Select id={"speed"} defaultValue={"5"} style={{textAlign: 'center'}} onChange={(event) => {
-                            speed = event.target.value;
-                        }}>
-                            <MenuItem value="80">Slow</MenuItem>
-                            <MenuItem value="30">Fast</MenuItem>
-                            <MenuItem value="15">Faster</MenuItem>
-                            <MenuItem value="5">Extra Fast</MenuItem>
-                            <MenuItem value="0">Instant</MenuItem>
-                        </Select>
-                    </FormControl>
-                </div>
-                <div>
-                    <FormControl className={"customSelect"} variant={'standard'} sx={{ m: 1, minWidth: 80 }}>
-                        <InputLabel id="demo-simple-select-label">Algorithms</InputLabel>
-                        <Select
-                            labelId="demo-simple-select-label"
-                            id="demo-simple-select"
-                            label="Algorithms"
-                            defaultValue={0}
-                            onChange={(event) => {
-                                this.algorithm = event.target.value;
-                            }}
-                        >
-                                <MenuItem value={0}>Dijkstra algorithm</MenuItem>
-                                <MenuItem value={1}>Greedy best first search</MenuItem>
-                        </Select>
-                    </FormControl>
-                    <ButtonGroup variant="contained">
-                        <Button onClick={() => this.visualize()}>Visualize</Button>
-                        <Button onClick={() => this.fullReset()}>Reset</Button>
-                        <Button onClick={() => this.resetWalls()}>Clear walls</Button>
-                        <Button onClick={() => this.clearVisualization()}>Clear path</Button>
-                    </ButtonGroup>
-                </div>
-                <ButtonGroup variant="contained" style={{transform: "translateY(-25%)"}}>
-                    <Button onClick={() => this.visualizeMaze()}>Generate maze</Button>
-                </ButtonGroup>
+                <AppBar>
+                    <Toolbar>
+                        <a href="https://github.com/tddebart/better-pathfinding-visualizer" target="_blank" rel="noreferrer">
+                            <img className={"github"} src={gitLogo} alt={"github"} />
+                        </a>
+                        <Typography variant="h6" component="div" style={{marginLeft: 10}}>
+                            Pathfinding visualizer
+                        </Typography>
+                        <div className={"center"}>
+                            {/*Speed control*/}
+                            <FormControl variant={'standard'} sx={{ m: 1, minWidth: 80 }}>
+                                <InputLabel id="demo-simple-select-label">Speeds</InputLabel>
+                                <Select id={"speed"} defaultValue={"5"} style={{textAlign: 'center'}} onChange={(event) => {
+                                    speed = event.target.value;
+                                }}>
+                                    <MenuItem value="80">Slow</MenuItem>
+                                    <MenuItem value="30">Fast</MenuItem>
+                                    <MenuItem value="15">Faster</MenuItem>
+                                    <MenuItem value="5">Extra Fast</MenuItem>
+                                    <MenuItem value="0">Instant</MenuItem>
+                                </Select>
+                            </FormControl>
+                            <FormControl className={"customSelect"} variant={'standard'} sx={{ m: 1, minWidth: 80 }}>
+                                <InputLabel id="demo-simple-select-label">Algorithms</InputLabel>
+                                <Select
+                                    labelId="demo-simple-select-label"
+                                    id="demo-simple-select"
+                                    label="Algorithms"
+                                    defaultValue={0}
+                                    onChange={(event) => {
+                                        this.algorithm = event.target.value;
+                                    }}
+                                >
+                                    <MenuItem value={0}>Dijkstra algorithm</MenuItem>
+                                    <MenuItem value={1}>A* algorithm</MenuItem>
+                                    <MenuItem value={2}>Greedy best first search</MenuItem>
+                                </Select>
+                            </FormControl>
+                            <ButtonGroup variant="contained" className="buttonDown">
+                                <Button onClick={() => this.visualize()}>Visualize</Button>
+                                <Button onClick={() => this.fullReset()}>Reset</Button>
+                                <Button onClick={() => this.resetWalls()}>Clear walls</Button>
+                                <Button onClick={() => this.clearVisualization()}>Clear path</Button>
+                            </ButtonGroup>
+
+                            <FormControl className={"customSelect"} variant={'standard'} sx={{ m: 1, minWidth: 80 }}>
+                                <InputLabel id="demo-simple-select-label">Maze's</InputLabel>
+                                <Select
+                                    labelId="demo-simple-select-label"
+                                    id="demo-simple-select"
+                                    label="Maze's"
+                                    defaultValue={0}
+                                    onChange={(event) => {
+                                        this.maze = event.target.value;
+                                    }}
+                                >
+                                    <MenuItem value={0}>Recursive division</MenuItem>
+                                    <MenuItem value={1}>Random</MenuItem>
+                                </Select>
+                            </FormControl>
+                            <ButtonGroup variant={"contained"} className="buttonDown">
+                               <Button onClick={() => this.visualizeMaze()}>Generate maze</Button>
+                            </ButtonGroup>
+                        </div>
+                    </Toolbar>
+                </AppBar>
                 <canvas
                     id={"canvas"}
                     // onClick={(e) =>  this.calculateWall(e)}
@@ -618,11 +666,6 @@ const createNode = (col, row) => {
         isWall: false,
         prevNode: null,
     }
-}
-
-// eslint-disable-next-line no-unused-vars
-function randomNumber(min, max) {
-    return Math.floor(Math.random() * (max - min) + min);
 }
 
 const getInitialGrid = () => {
