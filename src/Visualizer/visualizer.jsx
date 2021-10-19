@@ -284,6 +284,11 @@ export default class Visualizer extends Component {
                 }
             }, speed * i))
         }
+        timeouts.push(setTimeout(() => {
+            timeouts.push(setTimeout(() => {
+                this.busy = false;
+            }, speed!=="0" || instant ? 35*nodesInShortestPathOrder.length : 0))
+        },speed!=="0" || instant ? speed*(visitedNodesInOrder.length+1): 0))
     }
 
     shortPath(nodesInShortestPathOrder, instant = false) {
